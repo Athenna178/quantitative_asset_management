@@ -47,7 +47,7 @@ def run_portfolio_module():
             # Calculate total for validation
             total_weight = round(sum(weights.values()) * 100, 2)
 
-            # 3. Validation and Execution [cite: 8, 60]
+            # 3. Validation and Execution
             if not equal_weight_active and total_weight != 100.0:
                 st.error(f"**Allocation Error:** Total sum must be 100%. Current: **{total_weight}%**")
             else:
