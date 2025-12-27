@@ -1,11 +1,31 @@
 import streamlit as st
 import plotly.graph_objects as go
-from portfolio_engine import fetch_portfolio_data, simulate_portfolio, get_advanced_metrics
+import pandas as pd
+import os
+from quant_b_portfolio.portfolio_engine import fetch_portfolio_data, simulate_portfolio, get_advanced_metrics
 from streamlit_autorefresh import st_autorefresh # for the 5-minute refresh 
+from quant_b_portfolio.data_manager import save_config, load_config, log_daily_performance
 
 def run_portfolio_module():
     # Auto-refresh every 5 minutes = 300 seconds
     st_autorefresh(interval=5 * 60 * 1000, key="datarefresh")
+
+    # --- Load Saved Configuration ---
+    saved_config = load_config()
+    
+    # Defaults (if no save file exists)
+    default_tickers = ["MC.PA", "BTC-USD", "OR.PA"]
+    default_freq = "None"
+    default_timeframe = "1y"
+    default_equal = True
+    saved_weights = {}
+
+    if saved_config:
+        default_tickers = saved_config.get("tickers", default_tickers)
+        default_freq = saved_config.get("freq", default_freq)
+        default_timeframe = saved_config.get("timeframe", default_timeframe)
+        default_equal = saved_config.get("equal_weights", default_equal)
+        saved_weights = saved_config.get("weights", {})
 
     st.title("Professional Portfolio Analyzer")
 
@@ -45,15 +65,37 @@ def run_portfolio_module():
 
     # 2. Sidebar Configuration
     st.sidebar.header("Strategy Settings")
+    
+    # Helper to find index for selectbox defaults
+    freq_options = ["None", "Monthly", "Yearly"]
+    try:
+        freq_index = freq_options.index(default_freq)
+    except ValueError:
+        freq_index = 0
+
+    time_options = ["1mo", "6mo", "1y", "2y"]
+    try:
+        time_index = time_options.index(default_timeframe)
+    except ValueError:
+        time_index = 2
+
     tickers = st.sidebar.multiselect(
         "Assets Selection", 
         all_tickers, 
-        default=["MC.PA", "BTC-USD", "OR.PA"]
+        default=default_tickers
     )
     
-    equal_weight_active = st.sidebar.checkbox("Use Equal Weights", value=True)
-    freq = st.sidebar.selectbox("Rebalancing Frequency", ["None", "Monthly", "Yearly"])
-    timeframe = st.sidebar.selectbox("Timeframe", ["1mo", "6mo", "1y", "2y"], index=2)
+    equal_weight_active = st.sidebar.checkbox("Use Equal Weights", value=default_equal)
+    freq = st.sidebar.selectbox("Rebalancing Frequency", freq_options, index=freq_index)
+    timeframe = st.sidebar.selectbox("Timeframe", time_options, index=time_index)
+
+    # --- SAVE BUTTON ---
+    if st.sidebar.button("Save Configuration"):
+        # We save the weights currently in the user_weights dictionary (captured later in code)
+        # Note: If equal_weight is active, specific weights matter less, but we save them anyway.
+        current_weights_to_save = st.session_state.get('current_user_weights', {})
+        if save_config(tickers, current_weights_to_save, freq, timeframe, equal_weight_active):
+            st.sidebar.success("Configuration saved successfully!")
 
     if len(tickers) >= 3: 
         prices, normalized = fetch_portfolio_data(tickers, period=timeframe)
@@ -66,21 +108,34 @@ def run_portfolio_module():
             auto_w = float(100.0 / len(tickers))
             
             for i, col in enumerate(cols):
+                ticker = tickers[i]
+                
+                # Determine default value for the input
+                # If we have a saved weight for this ticker, use it. Otherwise use auto_w.
+                if ticker in saved_weights and not equal_weight_active:
+                    default_val = float(saved_weights[ticker] * 100)
+                else:
+                    default_val = auto_w
+
                 # Input for weights
                 w = col.number_input(
-                    f"{tickers[i]} (%)", 
+                    f"{ticker} (%)", 
                     min_value=0.0, 
                     max_value=100.0, 
-                    value=auto_w, 
+                    value=default_val, 
                     step=0.01,
                     format="%.2f",
-                    disabled=equal_weight_active 
+                    disabled=equal_weight_active,
+                    key=f"weight_{ticker}" 
                 )
-                user_weights[tickers[i]] = w / 100
+                user_weights[ticker] = w / 100
                 
                 # --- Project Requirement: Display current value  ---
-                current_price = prices[tickers[i]].iloc[-1]
+                current_price = prices[ticker].iloc[-1]
                 col.write(f"Price: **{current_price:,.2f}**")
+
+            # Store weights in session state for the Save button to access
+            st.session_state['current_user_weights'] = user_weights
 
             # Calculation of the total sum entered by the user
             total_sum = sum(user_weights.values())
@@ -101,6 +156,22 @@ def run_portfolio_module():
                 portfolio_ts = simulate_portfolio(prices, normalized, final_weights, freq)
                 metrics = get_advanced_metrics(prices, portfolio_ts, final_weights)
                 st.caption("🔄 Data automatically refreshes every 5 minutes")
+                
+                # --- REPORTING BUTTONS ---
+                c1, c2 = st.columns([1, 3])
+                with c1:
+                    if st.button("Generate Daily Report"):
+                        if log_daily_performance(metrics):
+                            st.success("Report logged.")
+                
+                with c2:
+                    if st.checkbox("Show Report History"):
+                        if os.path.exists("portfolio_history.csv"):
+                            history_df = pd.read_csv("portfolio_history.csv")
+                            st.dataframe(history_df.sort_index(ascending=False), use_container_width=True)
+                        else:
+                            st.info("No history found yet.")
+
                 # 5. Performance Chart
                 fig = go.Figure()
                 for t in tickers:
@@ -137,8 +208,7 @@ def run_portfolio_module():
                     template="plotly_dark",
                     yaxis_autorange='reversed'
                 )
-                st.plotly_chart(heatmap_fig, use_container_width=True)
-            
+                st.plotly_chart(heatmap_fig, use_container_width=True)        
     else:
         st.warning("Please select at least 3 assets to comply with project rules.")
 
