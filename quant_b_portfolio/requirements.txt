@@ -1,0 +1,7 @@
+streamlit
+pandas
+numpy
+yfinance
+plotly
+pandas_market_calendars
+streamlit_autorefresh
