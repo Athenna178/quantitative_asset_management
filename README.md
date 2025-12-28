@@ -1,11 +1,6 @@
-# Quantitative Asset Management Dashboard
+# Professional Quantitative Portfolio Analyzer
 
-![Python](https://img.shields.io/badge/Python-3.9%2B-blue)
-![Streamlit](https://img.shields.io/badge/Framework-Streamlit-red)
-![Platform](https://img.shields.io/badge/Platform-Linux%20VM-black)
-![License](https://img.shields.io/badge/License-MIT-green)
-
-## 📖 Project Overview
+## Project Overview
 
  This project implements a professional-grade interactive dashboard designed for a quantitative research team in Paris.  The platform continuously retrieves real-time financial data, executes quantitative strategies, and provides portfolio simulations.
 
@@ -19,7 +14,7 @@
 
 ---
 
-## 🏗 Architecture & Features
+## Architecture & Features
 
  The project is divided into two core quantitative modules integrated into a single Streamlit interface.
 
@@ -39,3 +34,26 @@ Focused on the deep analysis of single assets (Stocks, Forex, Commodities).
 *  **Risk Analysis:** Computation of the Correlation Matrix and Diversification Benefits.
 *  **Rebalancing:** Options for Monthly or Yearly rebalancing frequencies.
 *  **Benchmarking:** Visual comparison of Portfolio performance vs. Individual Assets.
+
+## Automation & Reporting
+The system features a robust automated reporting pipeline that operates independently of the web interface.
+
+### Daily Quantitative Report
+A standalone automation script, report_generator.py, is executed daily at 12:00 PM via a Linux Cron job.
+
+**State Persistence:** The script reads asset_config_a.json and portfolio_config.json to retrieve the user's latest saved strategies and tickers.
+
+**Cross-Module Execution:** It reuses the core logic from both engine.py (Quant A) and portfolio_engine.py (Quant B) to ensure metric consistency.
+
+**Output:** Generates a timestamped .txt report containing:
+
+**Quant A:** Strategy performance, Sharpe Ratio, and Max Drawdown for the selected asset.
+
+**Quant B:** Portfolio total return, volatility, and diversification benefits.
+
+### Server Configuration
+To maintain this automation on the Linux VM, the following crontab configuration is used:
+
+0 12 * * * cd $HOME/quantitative_asset_management && /usr/bin/python3 report_generator.py >> cron_log.txt 2>&1
+
+Ps : The script is designed to be case-insensitive and handles missing configuration files gracefully by skipping the respective module instead of crashing.
