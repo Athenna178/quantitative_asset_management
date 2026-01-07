@@ -6,6 +6,8 @@
 
  The application is deployed on a **Linux Virtual Machine**, ensuring 24/7 availability with automated data reporting via Cron jobs.
 
+**Machine IP : http://34.10.212.135:8501** 
+
 ### Key Objectives
 *  **Real-time Analysis:** Fetching market data updates every 5 minutes.
 *  **Backtesting:** Simulating trading strategies on historical data.
